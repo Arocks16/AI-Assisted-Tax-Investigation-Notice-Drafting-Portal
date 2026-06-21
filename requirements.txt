@@ -1,0 +1,8 @@
+streamlit
+langgraph
+pandas
+openpyxl
+fpdf2
+huggingface_hub
+tabulate
+python-dotenv
