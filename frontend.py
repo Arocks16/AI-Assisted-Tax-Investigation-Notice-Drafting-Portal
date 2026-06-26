@@ -4,7 +4,7 @@
 import uuid
 import streamlit as st 
 from backend import graph
-from langgraph.types import Commad
+from langgraph.types import Command
 from fpdf import FPDF
 
 st.set_page_config(page_title="Tax Investigation Portal", layout="wide")
