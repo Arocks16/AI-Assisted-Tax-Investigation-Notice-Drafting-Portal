@@ -45,29 +45,22 @@ def load_documents(state):
 
 def investigate(state):
     """Call LLM to identify discrepancies between ITR, Form 16, and AIS."""
-    state["investigation"] = llm.invoke(
+    result = llm.invoke(
         investigation_prompt.format(
             itr=state["itr_text"], form16=state["form16_text"], ais=state["ais_text"]
         )
     )
+    state["investigation"] = result or "No investigation output generated."
     return state
 
 
 def generate_report(state):
-    """Call LLM to format the investigation into a structured report."""
-    state["report"] = llm.invoke(f"""
-    Based on the investigation findings below, generate a structured markdown
-    Tax Investigation Report.
-
-    Include:
-    # Taxpayer Details - Name, PAN, Assessment Year
-    # Executive Summary
-    # Critical Issues - markdown table: Issue ID | Discrepancy Type | Description | Source Documents | Severity
-    # Detailed Findings - For each issue: Description, Values observed, Source documents, Reason for flagging
-
-    Investigation Findings:
-    {state["investigation"]}
-    """)
+    """Use the investigation output directly as the report. Fix formatting."""
+    text = state["investigation"]
+    # Convert markdown headings to bold (e.g. "# Title" -> "**Title**")
+    import re
+    text = re.sub(r"^#{1,6}\s+(.+)$", r"**\1**", text, flags=re.MULTILINE)
+    state["report"] = text
     return state
 
 
@@ -84,9 +77,12 @@ def route(state):
 
 def template_drafting(state):
     """Phase 2 — LLM drafts Section 142(1) scrutiny notice from the report."""
-    state["draft_notice_text"] = llm.invoke(
-        drafting_prompt.format(report=state["report"])
+    from datetime import date
+    today = date.today().strftime("%d-%m-%Y")
+    text = llm.invoke(
+        drafting_prompt.format(date=today, report=state["report"])
     )
+    state["draft_notice_text"] = text.replace("?", "")
     return state
 
 
@@ -108,7 +104,7 @@ def refine_notice(state):
     """LLM revises the notice based on AO's feedback."""
     state["draft_notice_text"] = llm.invoke(
         refinement_prompt.format(notice=state["draft_notice_text"], feedback=state["ao_feedback"])
-    )
+    ).replace("?", "")
     return state
 
 
@@ -157,7 +153,7 @@ builder.add_conditional_edges("ao_review_notice", route_notice, {
     "refine_notice": "refine_notice",
 })
 
-builder.add_edge("refine_notice", "template_drafting")
+builder.add_edge("refine_notice", "ao_review_notice")
 builder.add_edge("apply_dsc", END)
 builder.add_edge("close_case", END)
 

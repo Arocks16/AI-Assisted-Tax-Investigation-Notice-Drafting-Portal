@@ -1,9 +1,10 @@
 # Streamlit frontend for Phase 1 (Investigation) + Phase 2 (Notice Drafting)
 # Flow: select case → Phase 1 → AO review → Phase 2 (draft → review → refine loop → done)
 
-import streamlit as st
+import uuid
+import streamlit as st 
 from backend import graph
-from langgraph.types import Command
+from langgraph.types import Commad
 from fpdf import FPDF
 
 st.set_page_config(page_title="Tax Investigation Portal", layout="wide")
@@ -52,7 +53,8 @@ def generate_pdf(text: str, din: str = "") -> bytes:
         if not raw:
             pdf.ln(2.5)
             continue
-        s = raw.encode("ascii", "replace").decode("ascii")
+        # Encode to ascii (replacing non-ascii with ?) then strip any ?
+        s = raw.encode("ascii", "replace").decode("ascii").replace("?", "")
         pdf.set_x(lm)
         if s.startswith("Subject:"):
             pdf.set_font("Courier", "B", 9)
@@ -73,8 +75,9 @@ if st.session_state.step == "select":
     case = st.selectbox("Select Case", [
         "CASE-2025-001 — Rahul Sharma"
     ])
+    st.info("As this is a demonstration, sample data has been preloaded from the backend. The data includes the taxpayer's AIS, ITR, and Form 16.")
     if st.button("Start Investigation"):
-        st.session_state.config = {"configurable": {"thread_id": case.split(" — ")[0]}}
+        st.session_state.config = {"configurable": {"thread_id": str(uuid.uuid4())}}
         st.session_state.step = "running"
         st.rerun()
 
@@ -99,7 +102,7 @@ if st.session_state.step == "running":
 # ── Step 3: Phase 1 — AO review ─────────────────────────
 
 if st.session_state.step == "review":
-    st.markdown("### Investigation Report")
+    st.markdown("**Investigation Report**")
     with st.container():
         st.markdown(f'<div class="report-container">{st.session_state.report or "_No report generated."}</div>', unsafe_allow_html=True)
     st.divider()
@@ -136,8 +139,9 @@ if st.session_state.step == "phase2_review":
     if approve or revise:
         fb = "" if approve else feedback
         try:
-            for _ in graph.stream(Command(resume={"feedback": fb}), st.session_state.config, stream_mode="updates"):
-                pass
+            with st.spinner("Refining in progress..." if fb else ""):
+                for _ in graph.stream(Command(resume={"feedback": fb}), st.session_state.config, stream_mode="updates"):
+                    pass
             state = graph.get_state(st.session_state.config)
             if state.interrupts and "draft_notice" in state.interrupts[0].value:
                 st.session_state.draft_notice_text = state.interrupts[0].value["draft_notice"]

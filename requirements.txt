@@ -3,6 +3,5 @@ langgraph
 pandas
 openpyxl
 fpdf2
-huggingface_hub
+langchain-openai
 tabulate
-python-dotenv
